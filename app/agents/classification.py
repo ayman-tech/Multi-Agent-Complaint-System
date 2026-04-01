@@ -1,0 +1,75 @@
+"""Classification agent – assigns product category and issue type."""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+from app.retrieval.complaint_index import ComplaintIndex
+from app.schemas.classification import ClassificationResult
+
+logger = logging.getLogger(__name__)
+
+_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "classification.md"
+
+
+def _load_prompt() -> str:
+    return _PROMPT_PATH.read_text()
+
+
+def run_classification(
+    narrative: str,
+    product: str | None = None,
+    sub_product: str | None = None,
+    company: str | None = None,
+    state: str | None = None,
+    complaint_index: ComplaintIndex | None = None,
+    model_name: str = "gpt-4o",
+    temperature: float = 0.0,
+) -> ClassificationResult:
+    """Classify the complaint and return a structured result.
+
+    Optionally retrieves similar complaints to provide few‑shot context.
+    """
+    logger.info("Classification agent running")
+
+    # Retrieve similar complaints for context (RAG)
+    similar_context = ""
+    if complaint_index is not None:
+        similar_docs = complaint_index.search(narrative, k=3)
+        if similar_docs:
+            similar_context = "\n---\n".join(doc.page_content for doc in similar_docs)
+
+    system_prompt = _load_prompt()
+
+    user_message = (
+        f"Narrative: {narrative}\n"
+        f"Product (if provided): {product or 'N/A'}\n"
+        f"Sub‑product (if provided): {sub_product or 'N/A'}\n"
+        f"Company: {company or 'N/A'}\n"
+        f"State: {state or 'N/A'}\n"
+    )
+    if similar_context:
+        user_message += f"\nSimilar complaints for reference:\n{similar_context}\n"
+
+    prompt = ChatPromptTemplate.from_messages(
+        [("system", system_prompt), ("human", "{input}")]
+    )
+
+    llm = ChatOpenAI(model=model_name, temperature=temperature)
+    chain = prompt | llm
+
+    response = chain.invoke({"input": user_message})
+    result_data = json.loads(response.content)
+
+    result = ClassificationResult(**result_data)
+    logger.info(
+        "Classification complete – category=%s, confidence=%.2f",
+        result.product_category,
+        result.confidence,
+    )
+    return result

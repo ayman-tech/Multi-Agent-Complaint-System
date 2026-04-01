@@ -1,0 +1,50 @@
+"""Intake agent – validates, normalises and enriches the raw complaint."""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import datetime
+
+from app.schemas.case import CaseCreate, CaseRead, CaseStatus
+
+logger = logging.getLogger(__name__)
+
+
+def _normalise_text(text: str) -> str:
+    """Lower‑case, collapse whitespace, strip PII‑like patterns."""
+    text = re.sub(r"\b\d{3}[-.]?\d{2}[-.]?\d{4}\b", "[SSN_REDACTED]", text)
+    text = re.sub(r"\b\d{16}\b", "[CARD_REDACTED]", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def run_intake(payload: CaseCreate) -> CaseRead:
+    """Execute the intake step and return an enriched case object.
+
+    Responsibilities
+    ────────────────
+    • Validate required fields (Pydantic handles most of this).
+    • Redact obvious PII from the narrative.
+    • Normalise whitespace and casing.
+    • Stamp ``submitted_at`` if missing.
+    • Set status → ``intake_complete``.
+    """
+    logger.info("Intake agent processing new complaint")
+
+    clean_narrative = _normalise_text(payload.consumer_narrative)
+
+    case = CaseRead(
+        consumer_narrative=clean_narrative,
+        product=payload.product,
+        sub_product=payload.sub_product,
+        company=payload.company,
+        state=payload.state,
+        zip_code=payload.zip_code,
+        channel=payload.channel,
+        submitted_at=payload.submitted_at or datetime.utcnow(),
+        status=CaseStatus.INTAKE_COMPLETE,
+    )
+
+    logger.info("Intake complete – case %s", case.id)
+    return case
