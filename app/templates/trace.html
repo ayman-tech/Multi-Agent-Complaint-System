@@ -23,12 +23,21 @@
   <div class="flex items-center gap-4">
     {% set status_badge = {
       "completed": "bg-tertiary/15 text-tertiary",
+      "needs_follow_up": "bg-secondary/15 text-secondary",
+      "partially_completed": "bg-secondary/15 text-secondary",
       "escalated": "bg-error/15 text-error",
       "failed": "bg-error/15 text-error",
     } %}
+    {% set status_text = {
+      "needs_follow_up": "Needs Follow-Up",
+      "partially_completed": "Needs Follow-Up",
+      "completed": "Completed",
+      "escalated": "Escalated",
+      "failed": "Failed",
+    } %}
     <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase
                   {{ status_badge.get(run.run_status, 'bg-surface-container-highest text-on-surface-variant') }}">
-      {{ run.run_status or 'unknown' }}
+      {{ status_text.get(run.run_status, (run.run_status or 'unknown') | replace('_', ' ') | title) }}
     </span>
     <div>
       <h1 class="text-2xl font-headline font-extrabold tracking-tight">
@@ -155,7 +164,7 @@
         </div>
         <div class="bg-surface-container rounded-lg p-3">
           <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Status</div>
-          <div class="text-xs text-on-surface">{{ run.run_status or '—' }}</div>
+          <div class="text-xs text-on-surface">{{ status_text.get(run.run_status, (run.run_status or '—') | replace('_', ' ') | title) }}</div>
         </div>
         <div class="bg-surface-container rounded-lg p-3">
           <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Total Steps</div>
