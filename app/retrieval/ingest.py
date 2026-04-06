@@ -51,7 +51,7 @@ from app.utils.pii import redact_pii
 logger = logging.getLogger(__name__)
 
 # Default location of the CFPB dataset
-DEFAULT_CSV = Path(__file__).resolve().parent.parent.parent / "complaints 2.csv"
+DEFAULT_CSV = Path(__file__).resolve().parent.parent.parent / "complaints.csv"
 
 # ── Column mappings (CFPB dataset) ───────────────────────────────────────────
 COL_NARRATIVE = "Consumer complaint narrative"

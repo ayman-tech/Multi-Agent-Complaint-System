@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>{% block title %}Observatory{% endblock %} — Complaint Management</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-error-container": "#ffdad6",
+            "outline": "#8e909c",
+            "secondary-fixed-dim": "#b7c8e1",
+            "tertiary-container": "#002f1e",
+            "surface-container-high": "#222a3d",
+            "secondary-container": "#3a4a5f",
+            "tertiary": "#4edea3",
+            "on-primary": "#002e68",
+            "background": "#0b1326",
+            "on-tertiary-container": "#00a371",
+            "primary-fixed": "#d8e2ff",
+            "inverse-surface": "#dae2fd",
+            "surface": "#0b1326",
+            "surface-container": "#171f33",
+            "error": "#ffb4ab",
+            "secondary": "#b7c8e1",
+            "on-surface-variant": "#c5c6d2",
+            "primary-fixed-dim": "#adc7ff",
+            "surface-tint": "#adc7ff",
+            "surface-container-highest": "#2d3449",
+            "on-secondary-container": "#a9bad3",
+            "surface-container-lowest": "#060e20",
+            "error-container": "#93000a",
+            "on-secondary": "#213145",
+            "surface-bright": "#31394d",
+            "on-primary-container": "#478dff",
+            "outline-variant": "#444650",
+            "on-background": "#dae2fd",
+            "surface-container-low": "#131b2e",
+            "primary": "#adc7ff",
+            "surface-variant": "#2d3449",
+            "primary-container": "#002759",
+            "on-surface": "#dae2fd",
+            "on-error": "#690005"
+          },
+          borderRadius: {
+            DEFAULT: "0.125rem",
+            lg: "0.25rem",
+            xl: "0.5rem",
+            full: "0.75rem"
+          },
+          fontFamily: {
+            headline: ["Manrope", "sans-serif"],
+            body: ["Inter", "sans-serif"],
+            label: ["Inter", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      vertical-align: middle;
+    }
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3, .brand-font { font-family: 'Manrope', sans-serif; }
+  </style>
+  <link rel="stylesheet" href="/static/css/app.css"/>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+
+  <!-- Sidebar -->
+  <nav class="fixed left-0 top-0 w-64 h-screen bg-surface-container-lowest flex flex-col z-[60]"
+       style="box-shadow: 24px 0 48px -4px rgba(0,0,0,0.08);">
+
+    <!-- Logo -->
+    <div class="px-6 py-5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center">
+        <span class="material-symbols-outlined text-on-surface text-xl">monitoring</span>
+      </div>
+      <div>
+        <div class="font-headline font-extrabold text-on-surface text-base tracking-tight">OBSERVATORY</div>
+        <div class="text-[10px] text-on-surface-variant uppercase tracking-[0.15em]">Complaint AI</div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex-1 px-3 mt-2 space-y-1">
+      {% set nav_items = [
+        ("dashboard", "/", "dashboard", "Dashboard"),
+        ("trace", "/trace/latest", "account_tree", "Trace"),
+        ("analytics", "/analytics", "analytics", "Analytics"),
+        ("settings", "/settings", "settings", "Settings"),
+      ] %}
+      {% for key, href, icon, label in nav_items %}
+      <a href="{{ href }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200
+                {% if active_nav == key %}
+                  bg-primary-container/30 text-primary font-semibold border-r-4 border-primary
+                {% else %}
+                  text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface
+                {% endif %}">
+        <span class="material-symbols-outlined text-xl">{{ icon }}</span>
+        {{ label }}
+      </a>
+      {% endfor %}
+    </div>
+
+    <!-- Footer -->
+    <div class="px-3 pb-5 space-y-1 border-t border-outline-variant/10 pt-3 mt-2">
+      <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-on-surface-variant hover:bg-surface-container-high transition-all">
+        <span class="material-symbols-outlined text-xl">help</span>
+        Help
+      </a>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="fixed top-0 left-64 right-0 h-16 bg-surface/80 backdrop-blur-xl z-50 flex items-center justify-between px-8 border-b border-outline-variant/5">
+    <div class="flex items-center gap-6">
+      <h2 class="font-headline font-bold text-on-surface text-sm">Complaint Management</h2>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="document.documentElement.classList.toggle('dark')"
+              class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high transition-all"
+              title="Toggle theme">
+        <span class="material-symbols-outlined text-xl">dark_mode</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="ml-64 pt-16 min-h-screen">
+    <div class="p-8">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script src="/static/js/theme.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
