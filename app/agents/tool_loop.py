@@ -112,21 +112,24 @@ def run_agent_with_tools(
     final = llm.invoke(messages)  # no tools bound — forces text response
     try:
         parsed = parse_llm_json(final.content)
-        if return_evidence:
-            return parsed, _evidence_flags(tools_called)
-        return parsed
     except Exception as first_error:
         logger.warning("Final response was not valid JSON; requesting JSON repair")
         repair_prompt = (
             "Return ONLY a valid JSON object for the previously requested schema. "
             "Do not call tools, do not include markdown, prose, or tags."
         )
-        repaired = llm.invoke([*messages, AIMessage(content=final.content), HumanMessage(content=repair_prompt)])
+        repaired = llm.invoke(
+            [
+                *messages,
+                AIMessage(content=final.content),
+                HumanMessage(content=repair_prompt),
+            ]
+        )
         try:
             parsed = parse_llm_json(repaired.content)
-            if return_evidence:
-                return parsed, _evidence_flags(tools_called)
-            return parsed
         except Exception:
             raise first_error
 
+    if return_evidence:
+        return parsed, _evidence_flags(tools_called)
+    return parsed
