@@ -161,7 +161,7 @@ def derive_run_outcome(final_state: dict[str, Any]) -> tuple[str, str | None, st
     if decision == "escalate":
         status = "escalated"
     elif decision == "revise":
-        status = "partially_completed"
+        status = "needs_follow_up"
     else:
         status = "completed"
 
