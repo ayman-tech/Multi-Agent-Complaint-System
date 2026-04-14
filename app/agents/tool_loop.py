@@ -22,10 +22,13 @@ MAX_TOOL_ROUNDS = 5
 
 
 def _evidence_flags(tools_called: set[str]) -> dict[str, bool]:
-    return {
-        "similar_complaints_tool": "search_similar_complaints" in tools_called,
-        "taxonomy_tool": "lookup_company_taxonomy" in tools_called,
-    }
+    """Convert the set of invoked tool names into an audit flag dict.
+
+    Returns a mapping of ``{tool_name: True}`` for every tool that was called
+    at least once during the agent loop.  Used by callers that pass
+    ``return_evidence=True`` to build an :class:`~app.schemas.evidence.EvidenceTrace`.
+    """
+    return {name: True for name in tools_called}
 
 
 def run_agent_with_tools(
