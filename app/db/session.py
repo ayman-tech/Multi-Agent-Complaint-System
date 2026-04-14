@@ -60,7 +60,7 @@ def init_db() -> None:
     # tables. Since this project doesn't ship with Alembic migrations,
     # we do safe "add column if missing" for the known schema upgrades.
     with engine.connect() as conn:
-        columns_to_ensure: list[tuple[str, str]] = [
+        complaint_case_columns: list[tuple[str, str]] = [
             ("external_schema_json", "TEXT"),
             ("operational_mapping_json", "TEXT"),
             ("evidence_trace_json", "TEXT"),
@@ -72,6 +72,7 @@ def init_db() -> None:
             ("review_notes", "TEXT"),
             ("routed_to", "VARCHAR(120)"),
             ("classification_audit_json", "TEXT"),
+            ("user_id", "VARCHAR(64)"),
         ]
 
         classification_columns: list[tuple[str, str]] = [

@@ -51,6 +51,7 @@ class ComplaintCase(Base):
     product = Column(String(120))
     sub_product = Column(String(120))
     company = Column(String(200))
+    user_id = Column(String(64), nullable=True, index=True)
     state = Column(String(2))
     zip_code = Column(String(5))
     channel = Column(String(20), default="web")
@@ -82,6 +83,23 @@ class ComplaintCase(Base):
     resolution = relationship(
         "ResolutionRecord", back_populates="case", uselist=False
     )
+
+
+class IntakeSessionRecord(Base):
+    __tablename__ = "intake_sessions"
+
+    session_id = Column(String(32), primary_key=True)
+    channel = Column(String(20), nullable=False, default="web_chat")
+    company_id = Column(String(64), nullable=True)
+    turn_index = Column(Integer, nullable=False, default=0)
+    packet_json = Column(Text, nullable=False)
+    last_agent_message = Column(Text, nullable=False, default="")
+    last_user_message = Column(Text, nullable=False, default="")
+    conversation_history_json = Column(Text, nullable=False, default="[]")
+    completed = Column(Boolean, nullable=False, default=False)
+    handoff_triggered = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ClassificationRecord(Base):

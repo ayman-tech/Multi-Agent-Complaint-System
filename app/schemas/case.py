@@ -89,6 +89,21 @@ class CaseCreate(BaseModel):
     requested_resolution: Optional[str] = Field(
         None, description="Optional externally requested resolution"
     )
+    intake_intent: Optional[str] = Field(
+        None, description="Optional intake-stage intent label from the interactive intake agent"
+    )
+    intake_urgency: Optional[str] = Field(
+        None, description="Optional intake-stage urgency level from the interactive intake agent"
+    )
+    intake_recommended_handoff: Optional[str] = Field(
+        None, description="Optional intake-stage handoff recommendation"
+    )
+    intake_escalation_reasons: Optional[list[str]] = Field(
+        None, description="Optional intake-stage escalation reason codes"
+    )
+    intake_customer_summary: Optional[str] = Field(
+        None, description="Optional intake-stage summary captured during interactive intake"
+    )
 
     @model_validator(mode="after")
     def require_narrative_or_structured_path(self) -> CaseCreate:
@@ -120,6 +135,7 @@ class CaseRead(BaseModel):
     product: Optional[str] = None
     sub_product: Optional[str] = None
     company: Optional[str] = None
+    user_id: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
     channel: Channel = Channel.WEB
@@ -150,6 +166,10 @@ class CaseRead(BaseModel):
     team_assignment: Optional[str] = None
     sla_class: Optional[str] = None
     root_cause_hypothesis: Optional[dict] = None
+
+    # Jira integration (populated after routing)
+    jira_issue_key: Optional[str] = None   # e.g. "KAN-7"
+    jira_issue_url: Optional[str] = None   # direct browser URL
 
     class Config:
         from_attributes = True
