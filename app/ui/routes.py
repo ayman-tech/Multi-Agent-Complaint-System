@@ -334,6 +334,37 @@ async def complaint_detail(request: Request, case_id: str):
     })
 
 
+@router.post("/complaints/{case_id}/status", include_in_schema=False)
+async def update_complaint_status(
+    request: Request,
+    case_id: str,
+    new_status: str = Form(...),
+):
+    """Allow admin and team users to manually set a complaint status to resolved or routed."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] not in ("admin", "team"):
+        return _redirect_to_dashboard()
+
+    allowed = {"resolved", "routed"}
+    if new_status not in allowed:
+        return RedirectResponse(url=f"/complaints/{case_id}", status_code=302)
+
+    with get_db() as db:
+        db_case = db.query(ComplaintCase).filter(ComplaintCase.id == case_id).first()
+        if db_case is None:
+            return _redirect_to_dashboard()
+
+        # Team users can only update cases assigned to their team
+        if user["role"] == "team" and db_case.team_assignment != user.get("company"):
+            return _redirect_to_dashboard()
+
+        db_case.status = new_status
+
+    return RedirectResponse(url=f"/complaints/{case_id}", status_code=302)
+
+
 @router.get("/trace/latest", include_in_schema=False)
 async def latest_trace(request: Request):
     """Resolve sidebar Trace link to the most recent workflow run."""

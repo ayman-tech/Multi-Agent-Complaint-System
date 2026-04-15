@@ -87,6 +87,10 @@ class ComplaintCase(Base):
     routed_to = Column(String(120))
     classification_audit_json = Column(Text)
 
+    # ── LLM cost tracking ──────────────────────────────────────────────
+    token_total = Column(Integer, nullable=True)
+    cost_estimate_usd = Column(Float, nullable=True)
+
     # Relationships
     classification = relationship(
         "ClassificationRecord", back_populates="case", uselist=False

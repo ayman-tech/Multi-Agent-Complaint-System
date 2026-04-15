@@ -74,6 +74,8 @@ def init_db() -> None:
             ("routed_to", "VARCHAR(120)"),
             ("classification_audit_json", "TEXT"),
             ("user_id", "VARCHAR(64)"),
+            ("token_total", "INTEGER"),
+            ("cost_estimate_usd", "DOUBLE PRECISION"),
         ]
 
         classification_columns: list[tuple[str, str]] = [
