@@ -159,6 +159,14 @@ def build_analytics_data(db: Session) -> dict:
         if resolution_times else 0
     )
 
+    recent_rows = (
+        db.query(ComplaintCase)
+        .order_by(ComplaintCase.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    recent_cases = [build_case_summary(row) for row in recent_rows]
+
     return {
         "total_complaints": total_complaints,
         "avg_resolution_seconds": round(avg_resolution, 1),
@@ -166,6 +174,7 @@ def build_analytics_data(db: Session) -> dict:
         "risk_counts": dict(risk_counts),
         "team_counts": dict(team_counts.most_common(10)),
         "resolution_times": resolution_times[:20],
+        "recent_cases": recent_cases,
     }
 
 

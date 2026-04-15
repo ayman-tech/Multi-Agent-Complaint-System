@@ -610,3 +610,133 @@ async def settings(request: Request):
         "active_nav": "settings",
         "user": user,
     })
+
+
+@router.get("/chat-history", include_in_schema=False)
+async def chat_history(request: Request, page: int = 1, limit: int = 9):
+    """User's intake chat sessions — their past complaint conversations."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] not in ("user",):
+        return _redirect_to_dashboard()
+
+    offset = (page - 1) * limit
+
+    with get_db() as db:
+        query = (
+            db.query(ComplaintCase)
+            .filter(ComplaintCase.user_id == user.get("user_id"))
+            .order_by(ComplaintCase.created_at.desc())
+        )
+        total = query.count()
+        rows = query.offset(offset).limit(limit).all()
+        cases = [build_case_summary(row) for row in rows]
+
+    total_pages = max(1, (total + limit - 1) // limit)
+
+    return templates.TemplateResponse(request, "chat_history.html", context={
+        "active_nav": "chat_history",
+        "user": user,
+        "cases": cases,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
+    })
+
+
+@router.get("/documents", include_in_schema=False)
+async def saved_documents(request: Request):
+    """User's saved documents — AI-generated resolution briefs."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] not in ("user",):
+        return _redirect_to_dashboard()
+
+    import datetime
+
+    with get_db() as db:
+        all_cases = (
+            db.query(ComplaintCase)
+            .filter(ComplaintCase.user_id == user.get("user_id"))
+            .order_by(ComplaintCase.created_at.desc())
+            .all()
+        )
+        resolved_cases = [
+            build_case_summary(c) for c in all_cases if c.status in ("resolved", "closed")
+        ]
+        latest_case_obj = all_cases[0] if all_cases else None
+        latest_case = build_case_summary(latest_case_obj) if latest_case_obj else None
+
+    return templates.TemplateResponse(request, "saved_documents.html", context={
+        "active_nav": "documents",
+        "user": user,
+        "resolved_cases": resolved_cases,
+        "latest_case": latest_case,
+        "doc_count": len(resolved_cases),
+        "ai_doc_count": len(resolved_cases),
+        "today_date": datetime.date.today().strftime("%B %d, %Y"),
+    })
+
+
+@router.get("/resolutions", include_in_schema=False)
+async def resolution_history(request: Request):
+    """User's resolution history — outcomes of all closed complaints."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] not in ("user",):
+        return _redirect_to_dashboard()
+
+    with get_db() as db:
+        all_cases = (
+            db.query(ComplaintCase)
+            .filter(ComplaintCase.user_id == user.get("user_id"))
+            .order_by(ComplaintCase.created_at.desc())
+            .all()
+        )
+        resolved_cases_raw = [c for c in all_cases if c.status in ("resolved", "closed", "dismissed")]
+        pending_cases_raw = [c for c in all_cases if c.status not in ("resolved", "closed", "dismissed")]
+
+        resolved_cases = [build_case_summary(c) for c in resolved_cases_raw]
+        latest_resolution = build_case_summary(resolved_cases_raw[0]) if resolved_cases_raw else None
+
+    return templates.TemplateResponse(request, "resolution_history.html", context={
+        "active_nav": "resolutions",
+        "user": user,
+        "resolved_cases": resolved_cases,
+        "latest_resolution": latest_resolution,
+        "resolved_count": len(resolved_cases),
+        "pending_count": len(pending_cases_raw),
+    })
+
+
+@router.get("/costs", include_in_schema=False)
+async def costs(request: Request):
+    """Operational cost observability — LLM spend, token usage."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] != "admin":
+        return _redirect_to_dashboard()
+
+    return templates.TemplateResponse(request, "costs.html", context={
+        "active_nav": "costs",
+        "user": user,
+    })
+
+
+@router.get("/team", include_in_schema=False)
+async def team(request: Request):
+    """Team feedback management — human-in-the-loop reviews."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] != "admin":
+        return _redirect_to_dashboard()
+
+    return templates.TemplateResponse(request, "team.html", context={
+        "active_nav": "team",
+        "user": user,
+    })

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Chat History{% endblock %}
+
+{% block content %}
+<div class="mb-10">
+  <p class="text-[10px] uppercase tracking-[0.15em] text-on-surface-variant mb-1">Intake Sessions</p>
+  <h1 class="text-5xl font-headline font-extrabold tracking-tighter text-primary leading-none mb-4">Chat History</h1>
+  <p class="text-on-surface-variant text-lg leading-relaxed max-w-2xl">
+    Review your past interactions with the AI intake agent. Every conversation is a step toward resolution.
+  </p>
+</div>
+
+<!-- Search + Filter bar -->
+<div class="bg-surface-container-low rounded-xl p-4 mb-10 flex flex-wrap gap-4 items-center">
+  <div class="flex-1 min-w-[260px] relative">
+    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+    <input class="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 text-on-surface transition-all"
+           placeholder="Search by topic, keyword, or complaint ID…" type="text"/>
+  </div>
+  <div class="flex items-center gap-2">
+    <button class="px-5 py-3 bg-surface-container-lowest rounded-xl flex items-center gap-2 text-on-surface-variant text-sm font-medium hover:bg-surface-container-high transition-colors">
+      <span class="material-symbols-outlined text-lg">calendar_today</span> Date Range
+    </button>
+    <button class="px-5 py-3 bg-surface-container-lowest rounded-xl flex items-center gap-2 text-on-surface-variant text-sm font-medium hover:bg-surface-container-high transition-colors">
+      <span class="material-symbols-outlined text-lg">filter_list</span> Status
+    </button>
+  </div>
+</div>
+
+<!-- Chat History Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+  {% if cases %}
+  <!-- Section label: Active -->
+  <div class="lg:col-span-12">
+    <h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-6 flex items-center gap-4">
+      Active Complaints
+      <div class="flex-1 h-px bg-surface-container-high"></div>
+    </h3>
+  </div>
+
+  {% for case in cases[:2] %}
+  {% if loop.first %}
+  <!-- Large featured card -->
+  <div class="lg:col-span-8 group cursor-pointer">
+    <a href="/complaints/{{ case.id }}"
+       class="block bg-surface-container-lowest p-8 rounded-xl transition-all duration-300 hover:shadow-[0px_8px_40px_rgba(0,6,102,0.06)] relative overflow-hidden">
+      <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary to-primary-container"></div>
+      <div class="flex justify-between items-start mb-6">
+        <div class="flex gap-4 items-center">
+          <span class="material-symbols-outlined p-3 bg-secondary-container text-on-secondary-container rounded-full text-2xl"
+                style="font-variation-settings:'FILL' 1;">account_balance_wallet</span>
+          <div>
+            <h4 class="text-xl font-bold text-primary font-headline">{{ case.subject or ('Complaint #' ~ case.id[:8]) }}</h4>
+            <p class="text-sm text-on-surface-variant">{{ case.product or 'General complaint' }} · {{ case.created_at.strftime('%b %d, %Y') if case.created_at else '' }}</p>
+          </div>
+        </div>
+        <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-tight
+          {% if case.status == 'resolved' %}bg-secondary-container text-on-secondary-container
+          {% elif case.status == 'pending' %}bg-primary-fixed text-on-primary-fixed
+          {% else %}bg-surface-container-high text-on-surface-variant{% endif %}">
+          {{ case.status | title }}
+        </span>
+      </div>
+      <p class="text-sm text-on-surface-variant line-clamp-2 mb-4">{{ case.subject or 'No details captured.' }}</p>
+      <div class="flex items-center gap-6 text-sm text-on-surface-variant">
+        <div class="flex items-center gap-1">
+          <span class="material-symbols-outlined text-lg">forum</span> View complaint
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="material-symbols-outlined text-lg">schedule</span>
+          {{ case.created_at.strftime('%b %d, %Y') if case.created_at else 'Unknown date' }}
+        </div>
+      </div>
+    </a>
+  </div>
+  {% else %}
+  <!-- Secondary card -->
+  <div class="lg:col-span-4 group cursor-pointer">
+    <a href="/complaints/{{ case.id }}"
+       class="block bg-surface-container-low p-8 rounded-xl h-full transition-all duration-300 hover:bg-surface-container-high">
+      <div class="mb-4">
+        <span class="material-symbols-outlined text-primary mb-4 text-3xl">shield_person</span>
+        <h4 class="text-lg font-bold text-primary font-headline mb-2">{{ case.product or ('Case #' ~ case.id[:8]) }}</h4>
+        <p class="text-sm text-on-surface-variant leading-relaxed line-clamp-3">{{ case.subject or 'Intake chat session.' }}</p>
+      </div>
+      <div class="mt-6 flex items-center text-primary font-bold text-xs uppercase">
+        View Transcript <span class="material-symbols-outlined ml-1 text-sm">arrow_forward</span>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  {% if cases | length > 2 %}
+  <!-- Section label: Previous -->
+  <div class="lg:col-span-12 mt-4">
+    <h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-6 flex items-center gap-4">
+      Previous Sessions
+      <div class="flex-1 h-px bg-surface-container-high"></div>
+    </h3>
+  </div>
+
+  {% for case in cases[2:] %}
+  <div class="lg:col-span-4 group cursor-pointer">
+    <a href="/complaints/{{ case.id }}"
+       class="block bg-surface-container-lowest p-6 rounded-xl transition-all duration-300 hover:shadow-[0px_4px_20px_rgba(0,6,102,0.04)]">
+      <div class="flex justify-between items-start mb-4">
+        <div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+          <span class="material-symbols-outlined">
+            {% if case.product and 'mortgage' in case.product.lower() %}home
+            {% elif case.product and 'card' in case.product.lower() %}credit_card
+            {% else %}description{% endif %}
+          </span>
+        </div>
+        <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase
+          {% if case.status == 'resolved' %}bg-secondary-container text-on-secondary-container
+          {% elif case.status == 'pending' %}bg-primary-fixed text-on-primary-fixed
+          {% else %}bg-surface-container-high text-on-surface-variant{% endif %}">
+          {{ case.status | title }}
+        </span>
+      </div>
+      <h4 class="font-bold text-primary font-headline mb-1 text-sm">{{ case.subject or ('Case #' ~ case.id[:8]) }}</h4>
+      <p class="text-xs text-on-surface-variant line-clamp-2">{{ case.product or 'General' }} · {{ case.created_at.strftime('%b %d') if case.created_at else '' }}</p>
+    </a>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% else %}
+  <!-- Empty state -->
+  <div class="lg:col-span-12">
+    <div class="bg-surface-container-lowest rounded-xl p-16 text-center">
+      <div class="w-16 h-16 aurora-gradient rounded-full flex items-center justify-center mx-auto mb-6">
+        <span class="material-symbols-outlined text-3xl text-white">history</span>
+      </div>
+      <h3 class="font-headline text-2xl font-bold text-on-surface mb-3">No conversations yet</h3>
+      <p class="text-on-surface-variant text-sm max-w-sm mx-auto mb-8">
+        Your intake chat sessions with the AI agent will appear here after you lodge a complaint.
+      </p>
+      <a href="/complaints/new"
+         class="inline-flex items-center gap-2 aurora-gradient text-white px-8 py-3 rounded-full font-bold text-sm hover:opacity-90 transition-all">
+        <span class="material-symbols-outlined text-lg">add</span> Start New Conversation
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- CTA Banner -->
+  <div class="lg:col-span-12 mt-4 aurora-gradient text-white rounded-xl p-12 flex items-center justify-between overflow-hidden relative">
+    <div class="relative z-10">
+      <h2 class="font-headline text-3xl font-bold mb-2">Need a new perspective?</h2>
+      <p class="text-on-primary-container max-w-md text-sm leading-relaxed opacity-90">
+        Our AI agent is ready to help you file a new complaint or revisit an unresolved issue.
+      </p>
+      <a href="/complaints/new"
+         class="mt-8 inline-flex items-center gap-2 px-8 py-4 bg-secondary-container text-on-secondary-container rounded-full font-bold text-sm transition-all hover:bg-secondary-fixed active:scale-95">
+        <span class="material-symbols-outlined">add</span> Start New Conversation
+      </a>
+    </div>
+    <div class="absolute -right-20 -bottom-20 w-80 h-80 rounded-full bg-white/5 blur-3xl pointer-events-none"></div>
+    <div class="absolute right-12 top-1/2 -translate-y-1/2 opacity-10">
+      <span class="material-symbols-outlined text-[200px]" style="font-variation-settings:'FILL' 1;">forum</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer pagination -->
+{% if total_pages > 1 %}
+<footer class="mt-12 flex justify-between items-center text-on-surface-variant">
+  <p class="text-sm">Showing {{ cases|length }} of {{ total }} complaints</p>
+  <div class="flex gap-2">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}" class="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors">
+      <span class="material-symbols-outlined">chevron_left</span>
+    </a>
+    {% endif %}
+    <div class="flex items-center px-4 bg-surface-container-low rounded-full text-sm font-bold text-primary">
+      {{ page }} / {{ total_pages }}
+    </div>
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}" class="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors">
+      <span class="material-symbols-outlined">chevron_right</span>
+    </a>
+    {% endif %}
+  </div>
+</footer>
+{% endif %}
+{% endblock %}
