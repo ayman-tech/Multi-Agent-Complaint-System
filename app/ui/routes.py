@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Response, Form, status
 from fastapi.responses import RedirectResponse
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from app.db.session import get_db
@@ -25,6 +27,7 @@ from app.ui.context import (
     build_case_summary,
     build_case_detail,
     build_analytics_data,
+    build_production_evaluation_case_data,
     build_evaluation_case_data,
     build_evaluation_data,
     build_settings_data,
@@ -41,6 +44,46 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter(tags=["ui"])
+
+
+def _serialize_trace_step(step: WorkflowStep) -> dict:
+    output = {}
+    if step.output_snapshot_json:
+        try:
+            output = json.loads(step.output_snapshot_json)
+        except (json.JSONDecodeError, TypeError):
+            output = {}
+
+    input_data = {}
+    if step.input_snapshot_json:
+        try:
+            input_data = json.loads(step.input_snapshot_json)
+        except (json.JSONDecodeError, TypeError):
+            input_data = {}
+
+    state_diff = {}
+    if step.state_diff_json:
+        try:
+            state_diff = json.loads(step.state_diff_json)
+        except (json.JSONDecodeError, TypeError):
+            state_diff = {}
+
+    return {
+        "node_name": step.node_name,
+        "sequence": step.sequence_number,
+        "status": step.status,
+        "latency_ms": round(step.latency_ms, 1) if step.latency_ms else 0,
+        "model_name": step.model_name,
+        "confidence": step.confidence,
+        "error_type": step.error_type,
+        "error_message": step.error_message,
+        "output": output,
+        "input": input_data,
+        "state_diff": state_diff,
+        "retry_number": step.retry_number,
+        "started_at": step.started_at.strftime("%H:%M:%S") if step.started_at else None,
+        "ended_at": step.ended_at.strftime("%H:%M:%S") if step.ended_at else None,
+    }
 
 
 def _get_current_user(request: Request) -> dict[str, str | None] | None:
@@ -688,43 +731,7 @@ async def supervisor_trace(request: Request, run_id: str):
 
         step_data = []
         for s in steps:
-            output = {}
-            if s.output_snapshot_json:
-                try:
-                    output = json.loads(s.output_snapshot_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            input_data = {}
-            if s.input_snapshot_json:
-                try:
-                    input_data = json.loads(s.input_snapshot_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            state_diff = {}
-            if s.state_diff_json:
-                try:
-                    state_diff = json.loads(s.state_diff_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            step_data.append({
-                "node_name": s.node_name,
-                "sequence": s.sequence_number,
-                "status": s.status,
-                "latency_ms": round(s.latency_ms, 1) if s.latency_ms else 0,
-                "model_name": s.model_name,
-                "confidence": s.confidence,
-                "error_type": s.error_type,
-                "error_message": s.error_message,
-                "output": output,
-                "input": input_data,
-                "state_diff": state_diff,
-                "retry_number": s.retry_number,
-                "started_at": s.started_at.strftime("%H:%M:%S") if s.started_at else None,
-                "ended_at": s.ended_at.strftime("%H:%M:%S") if s.ended_at else None,
-            })
+            step_data.append(_serialize_trace_step(s))
 
     total_latency = sum(s["latency_ms"] for s in step_data)
 
@@ -736,7 +743,87 @@ async def supervisor_trace(request: Request, run_id: str):
         "active_nav": "trace",
         "user": user,
         "current_case_id": current_case_id,
+        "live_enabled": bool(run and run.get("run_status") in {"running", "partially_completed", "needs_follow_up"}),
     })
+
+
+@router.get("/trace/{run_id}/stream", include_in_schema=False)
+async def trace_stream(request: Request, run_id: str):
+    """SSE stream for live workflow step updates on the trace page."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] != "admin":
+        return _redirect_to_dashboard()
+
+    async def event_generator():
+        last_sequence = 0
+        last_status = None
+        while True:
+            if await request.is_disconnected():
+                break
+
+            with get_db() as db:
+                run_row = db.query(WorkflowRun).filter(WorkflowRun.run_id == run_id).first()
+                if run_row is None:
+                    payload = {"type": "not_found", "run_id": run_id}
+                    yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+                    break
+
+                steps = (
+                    db.query(WorkflowStep)
+                    .filter(
+                        WorkflowStep.run_id == run_id,
+                        WorkflowStep.sequence_number > last_sequence,
+                    )
+                    .order_by(WorkflowStep.sequence_number.asc())
+                    .all()
+                )
+                for step in steps:
+                    last_sequence = max(last_sequence, step.sequence_number)
+                    payload = {
+                        "type": "step",
+                        "run_id": run_id,
+                        "run_status": run_row.run_status,
+                        "step": _serialize_trace_step(step),
+                    }
+                    yield f"event: step\ndata: {json.dumps(payload)}\n\n"
+
+                if run_row.run_status != last_status:
+                    last_status = run_row.run_status
+                    run_payload = {
+                        "type": "run",
+                        "run_id": run_id,
+                        "run_status": run_row.run_status,
+                        "final_route": run_row.final_route,
+                        "final_severity": run_row.final_severity,
+                        "ended_at": run_row.ended_at.strftime("%H:%M:%S") if run_row.ended_at else None,
+                    }
+                    yield f"event: run\ndata: {json.dumps(run_payload)}\n\n"
+
+                if run_row.run_status in {"completed", "failed", "escalated", "needs_follow_up"}:
+                    done_payload = {
+                        "type": "done",
+                        "run_id": run_id,
+                        "run_status": run_row.run_status,
+                        "final_route": run_row.final_route,
+                        "final_severity": run_row.final_severity,
+                    }
+                    yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+                    break
+
+            yield "event: heartbeat\ndata: {}\n\n"
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/analytics", include_in_schema=False)
@@ -752,6 +839,26 @@ async def analytics(request: Request):
         data = build_analytics_data(db)
 
     return templates.TemplateResponse(request, "analytics.html", context={
+        "data": data,
+        "active_nav": "analytics",
+        "user": user,
+    })
+
+
+@router.get("/analytics/cases/{case_id}", include_in_schema=False)
+async def analytics_case_evaluation(request: Request, case_id: str):
+    """Admin production-evaluation report for a real complaint case."""
+    user = _get_current_user(request)
+    if user is None:
+        return _redirect_to_login()
+    if user["role"] != "admin":
+        return _redirect_to_dashboard()
+
+    with get_db() as db:
+        db_case = resolve_case_record(db, case_id)
+        resolved_id = db_case.id if db_case is not None else case_id
+    data = build_production_evaluation_case_data(resolved_id)
+    return templates.TemplateResponse(request, "analytics_case_detail.html", context={
         "data": data,
         "active_nav": "analytics",
         "user": user,

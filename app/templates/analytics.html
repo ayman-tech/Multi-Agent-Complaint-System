@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}AI Operational Intelligence{% endblock %}
+{% block title %}Analytics{% endblock %}
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -9,9 +9,9 @@
 <!-- Page Header -->
 <div class="flex justify-between items-end mb-10">
   <div>
-    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-1">Intelligence · Overview</p>
-    <h1 class="text-3xl font-headline font-extrabold tracking-tight text-primary">AI Operational Intelligence</h1>
-    <p class="text-on-surface-variant mt-1">Real-time resource allocation and complaint efficiency monitoring.</p>
+    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-1">Analytics · Admin View</p>
+    <h1 class="text-3xl font-headline font-extrabold tracking-tight text-primary">Complaint Analytics</h1>
+    <p class="text-on-surface-variant mt-1">Operational monitoring plus evaluation reporting for real complaint workflows.</p>
   </div>
   <div class="flex gap-2 bg-surface-container-low p-1 rounded-lg">
     <button class="px-4 py-1.5 rounded-md bg-surface-container-lowest shadow-sm text-sm font-semibold text-on-surface">All Time</button>
@@ -19,6 +19,34 @@
     <button class="px-4 py-1.5 rounded-md text-sm text-on-surface-variant hover:bg-surface-container-high transition-colors">Monthly</button>
   </div>
 </div>
+
+<!-- Production Evaluation Summary -->
+<section class="mb-8">
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h2 class="font-headline font-bold text-xl text-on-surface">Production Evaluation Summary</h2>
+      <p class="text-sm text-on-surface-variant">LLM judge and system assessment results for real lodged complaints.</p>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm">
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Evaluated Complaints</div>
+      <div class="text-3xl font-headline font-extrabold text-on-surface">{{ data.production_evaluation.summary.evaluated_count }}</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm border-l-4 border-secondary">
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Pass</div>
+      <div class="text-3xl font-headline font-extrabold text-secondary">{{ data.production_evaluation.summary.pass_count }}</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm border-l-4 border-primary">
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Needs Review</div>
+      <div class="text-3xl font-headline font-extrabold text-primary">{{ data.production_evaluation.summary.needs_review_count }}</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm border-l-4 border-error">
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Fail</div>
+      <div class="text-3xl font-headline font-extrabold text-error">{{ data.production_evaluation.summary.fail_count }}</div>
+    </div>
+  </div>
+</section>
 
 <!-- Summary Tiles -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -168,16 +196,19 @@
 
 </div>
 
-<!-- Active Intelligence Queue -->
+<!-- Complaint Evaluation Reports -->
 <section class="mt-8">
   <div class="flex items-center justify-between mb-5">
-    <h3 class="font-headline font-bold text-xl text-on-surface">Active Intelligence Queue</h3>
+    <h3 class="font-headline font-bold text-xl text-on-surface">Complaint Evaluation Reports</h3>
     <div class="flex gap-4">
       <div class="flex items-center gap-2 text-sm text-on-surface-variant">
-        <span class="w-2.5 h-2.5 rounded-full bg-secondary"></span> Classified
+        <span class="w-2.5 h-2.5 rounded-full bg-secondary"></span> Pass
       </div>
       <div class="flex items-center gap-2 text-sm text-on-surface-variant">
-        <span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span> Needs Review
+        <span class="w-2.5 h-2.5 rounded-full bg-primary"></span> Needs Review
+      </div>
+      <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+        <span class="w-2.5 h-2.5 rounded-full bg-error"></span> Fail
       </div>
     </div>
   </div>
@@ -186,20 +217,23 @@
       <thead>
         <tr class="bg-surface-container text-on-surface-variant text-[10px] uppercase tracking-widest font-bold">
           <th class="px-6 py-4">Complaint ID</th>
-          <th class="px-6 py-4">Status</th>
-          <th class="px-6 py-4">Product</th>
-          <th class="px-6 py-4">Risk</th>
-          <th class="px-6 py-4">Routed To</th>
+          <th class="px-6 py-4">Case Status</th>
+          <th class="px-6 py-4">System Eval</th>
+          <th class="px-6 py-4">LLM Judge</th>
+          <th class="px-6 py-4">Overall</th>
           <th class="px-6 py-4 text-right">Action</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-outline-variant/10 text-sm">
-        {% if data.recent_cases %}
-        {% for case in data.recent_cases %}
-        <tr class="hover:bg-surface-container-low transition-colors">
+        {% if data.production_evaluation.recent_case_reports %}
+        {% for case in data.production_evaluation.recent_case_reports %}
+        <tr class="hover:bg-surface-container-low transition-colors cursor-pointer"
+            onclick="window.location.href='/analytics/cases/{{ case.public_case_id or case.id }}'">
           <td class="px-6 py-4">
-            <div class="font-bold font-mono text-primary text-xs">#{{ case.public_case_id or case.id[:12] }}</div>
-            <div class="text-[10px] text-on-surface-variant mt-0.5">{{ case.subject[:40] }}</div>
+            <a href="/analytics/cases/{{ case.public_case_id or case.id }}"
+               class="font-bold font-mono text-primary text-xs hover:underline"
+               onclick="event.stopPropagation()">#{{ case.public_case_id or case.id[:12] }}</a>
+            <div class="text-[10px] text-on-surface-variant mt-0.5">{{ case.subject[:60] }}</div>
           </td>
           <td class="px-6 py-4">
             <span class="flex items-center gap-2">
@@ -210,24 +244,19 @@
               <span class="text-xs text-on-surface-variant">{{ case.status | replace('_', ' ') | title }}</span>
             </span>
           </td>
-          <td class="px-6 py-4 text-xs text-on-surface-variant">{{ case.product or '—' }}</td>
-          <td class="px-6 py-4">
-            {% if case.risk_level %}
-            <span class="status-dot {{ case.risk_level }}"></span>
-            <span class="ml-1.5 text-xs font-semibold uppercase
-                         {% if case.risk_level == 'critical' %}text-error
-                         {% elif case.risk_level == 'high' %}text-error/70
-                         {% else %}text-secondary{% endif %}">{{ case.risk_level }}</span>
-            {% else %}
-            <span class="text-xs text-on-surface-variant/40">—</span>
-            {% endif %}
+          <td class="px-6 py-4 text-xs">
+            <span class="{% if case.system_verdict == 'pass' %}text-secondary{% elif case.system_verdict == 'fail' %}text-error{% else %}text-primary{% endif %} font-semibold uppercase">{{ case.system_verdict | replace('_', ' ') }}</span>
           </td>
-          <td class="px-6 py-4 text-xs text-on-surface-variant">
-            {{ case.routed_to | replace('_', ' ') | title if case.routed_to else '—' }}
+          <td class="px-6 py-4 text-xs">
+            <span class="{% if case.judge_verdict == 'pass' %}text-secondary{% elif case.judge_verdict == 'fail' %}text-error{% else %}text-primary{% endif %} font-semibold uppercase">{{ case.judge_verdict | replace('_', ' ') }}</span>
+          </td>
+          <td class="px-6 py-4 text-xs">
+            <span class="{% if case.overall_status == 'pass' %}text-secondary{% elif case.overall_status == 'fail' %}text-error{% else %}text-primary{% endif %} font-semibold uppercase">{{ case.overall_status | replace('_', ' ') }}</span>
           </td>
           <td class="px-6 py-4 text-right">
-            <a href="/complaints/{{ case.id }}"
-               class="p-2 inline-flex hover:bg-surface-container-high rounded-lg text-primary transition-colors">
+            <a href="/analytics/cases/{{ case.public_case_id or case.id }}"
+               class="p-2 inline-flex hover:bg-surface-container-high rounded-lg text-primary transition-colors"
+               onclick="event.stopPropagation()">
               <span class="material-symbols-outlined text-lg">visibility</span>
             </a>
           </td>
@@ -236,15 +265,15 @@
         {% else %}
         <tr>
           <td colspan="6" class="px-6 py-12 text-center text-on-surface-variant/50 text-sm">
-            No cases in the queue
+            No complaint evaluations available yet
           </td>
         </tr>
         {% endif %}
       </tbody>
     </table>
     <div class="p-4 bg-surface-container-low flex justify-center border-t border-outline-variant/10">
-      <a href="/" class="text-xs font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
-        VIEW ALL COMPLAINTS <span class="material-symbols-outlined text-xs ml-1">expand_more</span>
+      <a href="/evaluation" class="text-xs font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+        VIEW BENCHMARK EVALUATION <span class="material-symbols-outlined text-xs ml-1">open_in_new</span>
       </a>
     </div>
   </div>

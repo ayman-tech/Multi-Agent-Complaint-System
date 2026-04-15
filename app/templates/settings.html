@@ -408,8 +408,14 @@
         <div class="space-y-5">
           {% for ctrl in data.root_cause_controls %}
           <div class="bg-surface-container-low rounded-xl p-6 border-l-4 border-tertiary-container">
-            <div class="font-mono text-xs font-bold text-on-tertiary-container mb-2">{{ ctrl.root_cause_category }}</div>
+            <div class="text-sm font-bold text-on-surface mb-1">{{ ctrl.root_cause_category }}</div>
+            {% if ctrl.get('root_cause_code') %}
+            <div class="font-mono text-[10px] font-bold text-on-tertiary-container mb-2">{{ ctrl.root_cause_code }}</div>
+            {% endif %}
             <p class="text-sm text-on-surface/80 leading-relaxed mb-4">{{ ctrl.description }}</p>
+            {% if ctrl.get('business_summary') %}
+            <div class="text-xs text-on-surface-variant mb-4">{{ ctrl.business_summary }}</div>
+            {% endif %}
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <!-- Cues -->

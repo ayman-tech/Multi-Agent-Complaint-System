@@ -100,11 +100,38 @@ def run_rubric_judge(
     if len(failed_dimensions) >= 3:
         overall = "fail"
 
+    reasoning_parts: list[str] = []
+    if contradiction_expected:
+        if contradiction_handled:
+            reasoning_parts.append("The analysis acknowledges the mismatch between the narrative and attached document evidence.")
+        else:
+            reasoning_parts.append("The analysis does not adequately address the mismatch between the narrative and document evidence.")
+    if documents:
+        if document_grounded:
+            reasoning_parts.append("The output appears to use the attached documents as part of the decision context.")
+        else:
+            reasoning_parts.append("Documents were attached but the analysis does not show clear evidence grounding.")
+    if monetary_amount_grounded:
+        reasoning_parts.append("Any monetary recommendation is reasonably grounded in the available evidence.")
+    else:
+        reasoning_parts.append("The monetary recommendation is not clearly grounded in the available evidence.")
+    if confidence_calibrated:
+        reasoning_parts.append("Confidence and review posture look proportionate to the evidence quality.")
+    else:
+        reasoning_parts.append("Confidence appears too strong given the uncertainty in the record.")
+    if not failed_dimensions:
+        reasoning_parts.append("Overall, the analysis is complete across classification, risk, root cause, and resolution.")
+    else:
+        reasoning_parts.append(
+            "The analysis still has gaps in: " + ", ".join(item.replace("_", " ") for item in failed_dimensions) + "."
+        )
+
     return {
         "judge_name": "rubric_judge",
         "judge_version": "v1",
         "overall_verdict": overall,
         "rubric": rubric,
+        "reasoning": " ".join(reasoning_parts),
         "summary": {
             "contradiction_expected": contradiction_expected,
             "narrative_amounts": narrative_amounts,

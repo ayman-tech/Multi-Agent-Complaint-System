@@ -10,9 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.documents.service import build_case_document_summary
 from app.evals.service import (
+    build_production_evaluation_case_detail as _build_production_evaluation_case_detail,
+    build_production_evaluation_dashboard_data as _build_production_evaluation_dashboard_data,
     build_evaluation_case_detail as _build_evaluation_case_detail,
     build_evaluation_dashboard_data as _build_evaluation_dashboard_data,
 )
+from app.knowledge.mock_company_pack import format_root_cause_category
 from app.db.models import (
     ComplaintCase,
     ClassificationRecord,
@@ -227,6 +230,14 @@ def build_case_detail(db_case: ComplaintCase) -> dict:
             "reasoning": res.reasoning,
         }
 
+    root_cause_hypothesis = _safe_json_load(db_case.root_cause_hypothesis_json)
+    if isinstance(root_cause_hypothesis, dict):
+        raw_category = root_cause_hypothesis.get("root_cause_category")
+        root_cause_hypothesis = {
+            **root_cause_hypothesis,
+            "root_cause_display_label": format_root_cause_category(raw_category),
+        }
+
     return {
         "id": db_case.id,
         "public_case_id": getattr(db_case, "public_case_id", None) or db_case.id[:12].upper(),
@@ -243,7 +254,7 @@ def build_case_detail(db_case: ComplaintCase) -> dict:
         "classification": classification,
         "risk_assessment": risk_assessment,
         "resolution": resolution,
-        "root_cause_hypothesis": _safe_json_load(db_case.root_cause_hypothesis_json),
+        "root_cause_hypothesis": root_cause_hypothesis,
         "compliance_flags": _safe_json_load(db_case.compliance_flags_json),
         "review_notes": db_case.review_notes,
         "routed_to": db_case.routed_to,
@@ -312,6 +323,8 @@ def build_analytics_data(db: Session) -> dict:
     )
     recent_cases = [build_case_summary(row) for row in recent_rows]
 
+    production_eval = _build_production_evaluation_dashboard_data()
+
     return {
         "total_complaints": total_complaints,
         "avg_resolution_seconds": round(avg_resolution, 1),
@@ -320,6 +333,7 @@ def build_analytics_data(db: Session) -> dict:
         "team_counts": dict(team_counts.most_common(10)),
         "resolution_times": resolution_times[:20],
         "recent_cases": recent_cases,
+        "production_evaluation": production_eval,
     }
 
 
@@ -407,4 +421,13 @@ def build_evaluation_case_data(eval_case_id: str) -> dict | None:
         return _build_evaluation_case_detail(eval_case_id)
     except Exception as e:
         logger.warning("Could not load evaluation case detail: %s", e)
+        return None
+
+
+def build_production_evaluation_case_data(case_id: str) -> dict | None:
+    """Load the full production complaint evaluation report."""
+    try:
+        return _build_production_evaluation_case_detail(case_id)
+    except Exception as e:
+        logger.warning("Could not load production evaluation case detail: %s", e)
         return None

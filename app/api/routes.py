@@ -29,6 +29,7 @@ from app.documents.service import (
     process_document,
 )
 from app.orchestrator.workflow import process_complaint
+from app.evals.service import evaluate_production_case
 from app.schemas.case import CaseCreate, CaseRead
 from app.utils.case_ids import ensure_case_public_id, resolve_case_record
 from app.agents.intake_engine import (
@@ -229,9 +230,8 @@ def _persist_case_and_outputs(case: CaseRead) -> None:
     with get_db() as db:
         db_case = ComplaintCase(
             id=case.id,
-            public_case_id=case.public_case_id,
             status=case.status.value,
-            consumer_narrative=case.consumer_narrative,
+            consumer_narrative=case.consumer_narrative or "",
             product=case.product,
             sub_product=case.sub_product,
             company=case.company,
@@ -259,6 +259,7 @@ def _persist_case_and_outputs(case: CaseRead) -> None:
             case.public_case_id = ensure_case_public_id(db, db_case)
         else:
             case.public_case_id = db_case.public_case_id
+        db_case.public_case_id = case.public_case_id
 
         # Persist agent outputs into dedicated relational tables.
         if case.classification:
@@ -325,13 +326,8 @@ def _upsert_case_and_outputs(case: CaseRead) -> None:
         if db_case is None:
             db_case = ComplaintCase(id=case.id)
             db.add(db_case)
-        if not db_case.public_case_id:
-            case.public_case_id = ensure_case_public_id(db, db_case)
-        else:
-            case.public_case_id = db_case.public_case_id
 
         db_case.status = case.status.value if hasattr(case.status, "value") else str(case.status)
-        db_case.public_case_id = case.public_case_id
         db_case.consumer_narrative = case.consumer_narrative or ""
         db_case.product = case.product
         db_case.sub_product = case.sub_product
@@ -354,6 +350,12 @@ def _upsert_case_and_outputs(case: CaseRead) -> None:
         db_case.classification_audit_json = _json_or_none(case.classification_audit)
         db_case.document_gate_result_json = _json_or_none(case.document_gate_result)
         db_case.document_consistency_json = _json_or_none(case.document_consistency)
+
+        if not db_case.public_case_id:
+            case.public_case_id = ensure_case_public_id(db, db_case)
+        else:
+            case.public_case_id = db_case.public_case_id
+        db_case.public_case_id = case.public_case_id
 
         classification_row = (
             db.query(ClassificationRecord)
@@ -460,6 +462,10 @@ def _process_case_background(
         case.id = case_id
         case.user_id = user_id
         _upsert_case_and_outputs(case)
+        try:
+            evaluate_production_case(case_id)
+        except Exception:
+            logger.exception("Production evaluation failed for case_id=%s", case_id)
         if session_id:
             _attach_intake_transcript_to_case(case_id, session_id)
     except Exception:
@@ -472,13 +478,14 @@ def _process_case_background(
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new consumer complaint",
 )
-async def create_complaint(payload: CaseCreate) -> CaseRead:
+async def create_complaint(payload: CaseCreate, background_tasks: BackgroundTasks) -> CaseRead:
     """Accept a complaint, run it through the full agent pipeline, and return
     the enriched case with classification, risk, resolution, and routing."""
     try:
         final_state = process_complaint(payload.model_dump())
         case: CaseRead = final_state["case"]
         _persist_case_and_outputs(case)
+        background_tasks.add_task(evaluate_production_case, case.id)
         return case
 
     except Exception as exc:

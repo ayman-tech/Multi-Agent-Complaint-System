@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Complaint Evaluation Report{% endblock %}
+
+{% block content %}
+{% if data is none %}
+<div class="py-20 text-center">
+  <p class="text-lg font-headline font-bold text-on-surface-variant/60">Evaluation report not found</p>
+  <a href="/analytics" class="text-sm text-primary hover:underline mt-3 inline-block font-semibold">Back to analytics</a>
+</div>
+{% else %}
+<div class="space-y-8">
+  <div class="flex items-center gap-2 text-sm text-on-surface-variant">
+    <a href="/analytics" class="hover:text-primary transition-colors">Analytics</a>
+    <span>/</span>
+    <span>Complaint Evaluation</span>
+  </div>
+
+  <header class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+    <div>
+      <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-1">Production Evaluation</p>
+      <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface">Case #{{ data.case.public_case_id }}</h1>
+      <p class="text-sm text-on-surface-variant mt-2">
+        Status {{ data.case.status | replace('_', ' ') | title }}
+        {% if data.report.evaluated_at %} · Evaluated {{ data.report.evaluated_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+      </p>
+    </div>
+    <div class="text-right">
+      <div class="text-[10px] uppercase tracking-widest font-bold {% if data.report.overall_status == 'pass' %}text-secondary{% elif data.report.overall_status == 'fail' %}text-error{% else %}text-primary{% endif %}">
+        {{ data.report.overall_status }}
+      </div>
+      <div class="text-xs text-on-surface-variant mt-1">
+        {% if data.report.metrics %}
+        System {{ data.report.metrics.system_verdict or 'pending' }} · Judge {{ data.report.metrics.judge_verdict or 'pending' }}
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+    <div class="xl:col-span-5 space-y-6">
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-headline font-bold mb-4">Complaint Record</h2>
+        <div class="space-y-4">
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Consumer Narrative</div>
+            <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface whitespace-pre-wrap">{{ data.case.consumer_narrative }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Documents</div>
+            {% if data.documents %}
+            <pre class="bg-surface-container-low rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.documents | tojson(indent=2) }}</pre>
+            {% else %}
+            <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface-variant">No attached documents.</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-headline font-bold mb-4">System Evaluation</h2>
+        {% if data.report.system_assessment %}
+        <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface mb-4">{{ data.report.system_reasoning }}</div>
+        <pre class="bg-surface-container-low rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.report.system_assessment | tojson(indent=2) }}</pre>
+        {% else %}
+        <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface-variant">No system evaluation stored yet.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div class="xl:col-span-7 space-y-6">
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-headline font-bold mb-4">Judge-Facing Prediction</h2>
+        {% if data.report.system_prediction %}
+        <pre class="bg-surface-container-low rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.report.system_prediction | tojson(indent=2) }}</pre>
+        {% else %}
+        <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface-variant">No prediction record is available yet.</div>
+        {% endif %}
+      </section>
+
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-headline font-bold mb-4">LLM Judge Report</h2>
+        {% if data.report.judge_output %}
+        <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface mb-4">{{ data.report.judge_reasoning }}</div>
+        <pre class="bg-surface-container-low rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.report.judge_output | tojson(indent=2) }}</pre>
+        {% else %}
+        <div class="bg-surface-container-low rounded-xl p-4 text-sm text-on-surface-variant">No judge report is available yet.</div>
+        {% endif %}
+      </section>
+
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-headline font-bold mb-4">Review Signals</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-surface-container-low rounded-xl p-4">
+            <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Disagreement Types</div>
+            <pre class="text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.report.disagreement_types | tojson(indent=2) }}</pre>
+          </div>
+          <div class="bg-surface-container-low rounded-xl p-4">
+            <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">Metrics</div>
+            <pre class="text-xs overflow-x-auto whitespace-pre-wrap break-words">{{ data.report.metrics | tojson(indent=2) }}</pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

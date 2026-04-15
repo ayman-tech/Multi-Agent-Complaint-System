@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 # A simulated "company knowledge pack" used for this demo repository.
 # In a real multi-company deployment, this pack would be replaced per company.
@@ -911,30 +912,78 @@ ROUTING_MATRIX = {
 # 6. Root cause taxonomy
 ROOT_CAUSE_CONTROLS = [
     {
-        "root_cause_category": "fraud_false_positive_hold",
-        "description": "The system restricts access due to fraud rules, but the hold is not released after validation.",
-        "cues": ["frozen", "hold", "fraud", "unauthorized", "paycheck", "access blocked"],
-        "controls_to_check": ["fraud_model_decision_trace", "manual review queue", "release SLA"],
+        "root_cause_category": "Fraud review or card-blocking delay",
+        "root_cause_code": "fraud_review_or_card_blocking_delay",
+        "description": "The bank's fraud controls may not have blocked the activity quickly enough, or a fraud-related restriction was not reviewed and resolved in time.",
+        "business_summary": "Likely breakdown in fraud monitoring, alert response, or card-block timing.",
+        "cues": ["fraud", "unauthorized transaction", "lost card", "stolen card", "blocked card", "hold", "frozen", "access blocked"],
+        "controls_to_check": ["Fraud alert decision trace", "Manual fraud review queue", "Card block and release turnaround"],
     },
     {
-        "root_cause_category": "misapplied_payment_or_processing_bug",
-        "description": "Payment processing fails to apply credits, or settlement mapping is incorrect.",
-        "cues": ["misapplied", "declined", "returned", "payment not applied", "processing"],
-        "controls_to_check": ["payment posting logs", "settlement mapping", "reversal workflow"],
+        "root_cause_category": "Payment posting or transaction processing error",
+        "root_cause_code": "payment_posting_or_transaction_processing_error",
+        "description": "A transaction, payment, reversal, or settlement may have been posted incorrectly or failed somewhere in processing.",
+        "business_summary": "Likely operational issue in payment posting, settlement mapping, or reversal handling.",
+        "cues": ["misapplied", "declined", "returned", "payment not applied", "processing", "posted wrong", "reversal"],
+        "controls_to_check": ["Payment posting logs", "Settlement mapping checks", "Reversal workflow audit"],
     },
     {
-        "root_cause_category": "billing_dispute_handling_gap",
-        "description": "Duplicate charges or fee disputes are not investigated or corrected in the resolution workflow.",
-        "cues": ["charged twice", "duplicate", "fee", "refund", "billing dispute"],
-        "controls_to_check": ["chargeback/reversal logic", "fee reconciliation", "investigation SOP adherence"],
+        "root_cause_category": "Billing or fee dispute investigation gap",
+        "root_cause_code": "billing_or_fee_dispute_investigation_gap",
+        "description": "A duplicate charge, fee dispute, or refund request may not have been investigated or corrected through the standard dispute workflow.",
+        "business_summary": "Likely weakness in dispute intake, fee review, or refund decisioning.",
+        "cues": ["charged twice", "duplicate", "fee", "refund", "billing dispute", "overcharged", "late fee"],
+        "controls_to_check": ["Chargeback and reversal logic", "Fee reconciliation review", "Dispute handling procedure"],
     },
     {
-        "root_cause_category": "disclosure_notice_adequacy",
-        "description": "Notices/disclosures for account changes are missing, unclear, or not delivered as required.",
-        "cues": ["notice", "disclosure", "terms", "not provided", "unclear"],
-        "controls_to_check": ["template versioning", "delivery channel logs", "customer communications review"],
+        "root_cause_category": "Notice or disclosure delivery failure",
+        "root_cause_code": "notice_or_disclosure_delivery_failure",
+        "description": "Required notices, disclosures, or account communications may have been missing, unclear, or not delivered through the right channel.",
+        "business_summary": "Likely issue in customer communications, notice generation, or delivery tracking.",
+        "cues": ["notice", "disclosure", "terms", "not provided", "unclear", "didn't receive", "no notice"],
+        "controls_to_check": ["Template version control", "Delivery channel logs", "Customer communications review"],
+    },
+    {
+        "root_cause_category": "Customer service follow-up failure",
+        "root_cause_code": "customer_service_follow_up_failure",
+        "description": "The complaint may reflect delayed response, missed callbacks, or lack of follow-up after the customer reported the issue.",
+        "business_summary": "Likely service breakdown in complaint handling, callback management, or case ownership.",
+        "cues": ["no response", "no one called", "no follow up", "never heard back", "customer service", "ignored"],
+        "controls_to_check": ["Case ownership queue", "Callback and follow-up SLA", "Complaint response audit trail"],
+    },
+    {
+        "root_cause_category": "Merchant or third-party dispute outside direct bank control",
+        "root_cause_code": "merchant_or_third_party_dispute_outside_direct_bank_control",
+        "description": "The core issue may stem from a merchant, service provider, or external party rather than an internal bank processing failure.",
+        "business_summary": "Likely merchant-side fulfillment, quality, or third-party service dispute requiring the right remediation path.",
+        "cues": ["merchant", "seller", "defective", "never delivered", "store", "vendor", "third party", "quality issue"],
+        "controls_to_check": ["Charge dispute eligibility", "Merchant evidence requirements", "External escalation path"],
     },
 ]
+
+
+_ROOT_CAUSE_DISPLAY_BY_KEY = {
+    str(entry.get("root_cause_category") or "").strip(): entry.get("root_cause_category") or ""
+    for entry in ROOT_CAUSE_CONTROLS
+}
+_ROOT_CAUSE_DISPLAY_BY_KEY.update(
+    {
+        str(entry.get("root_cause_code") or "").strip(): entry.get("root_cause_category") or ""
+        for entry in ROOT_CAUSE_CONTROLS
+        if entry.get("root_cause_code")
+    }
+)
+
+
+def format_root_cause_category(value: str | None) -> str:
+    """Return a business-readable root cause label for UI surfaces."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    if raw in _ROOT_CAUSE_DISPLAY_BY_KEY:
+        return _ROOT_CAUSE_DISPLAY_BY_KEY[raw]
+    slug = re.sub(r"[_\s]+", " ", raw).strip()
+    return slug[:1].upper() + slug[1:]
 
 
 class MockCompanyPack:

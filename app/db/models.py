@@ -109,6 +109,9 @@ class ComplaintCase(Base):
     documents = relationship(
         "CaseDocument", back_populates="case"
     )
+    evaluation_report = relationship(
+        "ComplaintEvaluationReport", back_populates="case", uselist=False
+    )
 
 
 class IntakeSessionRecord(Base):
@@ -432,6 +435,30 @@ class EvaluationDisagreement(Base):
     resolved_at = Column(DateTime, nullable=True)
 
     review_record = relationship("EvaluationReviewRecord", back_populates="disagreement")
+
+
+class ComplaintEvaluationReport(Base):
+    """Stored evaluation report for a real production complaint case."""
+
+    __tablename__ = "complaint_evaluation_reports"
+
+    id = Column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
+    case_id = Column(String(32), ForeignKey("complaint_cases.id"), nullable=False, unique=True, index=True)
+    run_status = Column(String(32), nullable=False, default="completed")
+    system_prediction_json = Column(Text, nullable=True)
+    system_assessment_json = Column(Text, nullable=True)
+    judge_output_json = Column(Text, nullable=True)
+    overall_status = Column(String(32), nullable=False, default="pending")
+    needs_human_review = Column(Boolean, nullable=False, default=False)
+    disagreement_types_json = Column(Text, nullable=True)
+    metrics_json = Column(Text, nullable=True)
+    judge_reasoning = Column(Text, nullable=True)
+    system_reasoning = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    evaluated_at = Column(DateTime, nullable=True)
+
+    case = relationship("ComplaintCase", back_populates="evaluation_report")
 
 
 class CaseDocument(Base):

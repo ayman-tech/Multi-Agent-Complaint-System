@@ -68,5 +68,4 @@ def ensure_case_public_id(session: Session, case: ComplaintCase) -> str:
         return case.public_case_id
     public_id = next_public_case_id(session)
     case.public_case_id = public_id
-    session.flush()
     return public_id

@@ -46,6 +46,8 @@ Return a JSON object matching the RootCauseHypothesis schema:
 
 Rules:
 - Prefer grounding in provided control knowledge and evidence.
+- Use business-readable root cause category labels from the retrieved control knowledge,
+  not low-level snake_case identifiers.
 - If uncertainty remains, use lower confidence and suggest controls_to_check \
 that can validate the hypothesis.
 """

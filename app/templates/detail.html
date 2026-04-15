@@ -117,12 +117,25 @@
         <h2 class="font-headline font-bold text-lg text-on-surface">Root Cause Hypothesis</h2>
       </div>
       {% set rc = case.root_cause_hypothesis %}
-      {% if rc.root_cause_category %}
-      <div class="text-sm font-bold text-on-surface mb-3">{{ rc.root_cause_category }}</div>
+      {% if rc.root_cause_display_label or rc.root_cause_category %}
+      <div class="text-base font-bold text-on-surface mb-1">{{ rc.root_cause_display_label or rc.root_cause_category }}</div>
+      {% if rc.root_cause_category and rc.root_cause_category != (rc.root_cause_display_label or rc.root_cause_category) %}
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-3 font-semibold">{{ rc.root_cause_category }}</div>
+      {% endif %}
       {% endif %}
       {% if rc.reasoning %}
       <div class="bg-surface-container-low rounded-lg p-4">
         <p class="text-sm text-on-surface/70 italic leading-relaxed">{{ rc.reasoning }}</p>
+      </div>
+      {% endif %}
+      {% if rc.controls_to_check %}
+      <div class="mt-4">
+        <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">What To Check</div>
+        <div class="flex flex-wrap gap-2">
+          {% for control in rc.controls_to_check %}
+          <span class="px-2.5 py-1 rounded-full bg-surface-container-low text-xs text-on-surface">{{ control }}</span>
+          {% endfor %}
+        </div>
       </div>
       {% endif %}
       {% if rc.confidence %}

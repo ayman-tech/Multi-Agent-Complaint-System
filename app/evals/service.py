@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from app.db.models import (
+    CaseDocument,
+    ComplaintCase,
+    ComplaintEvaluationReport,
     EvaluationCase,
     EvaluationDataset,
     EvaluationDisagreement,
@@ -21,6 +24,10 @@ from app.db.models import (
     EvaluationReviewRecord,
     EvaluationRun,
     EvaluationSystemPrediction,
+    DocumentArtifact,
+    ClassificationRecord,
+    RiskRecord,
+    ResolutionRecord,
     SourceDataset,
     SourceDatasetItem,
 )
@@ -607,6 +614,226 @@ def _build_normalized_prediction(system_output: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _collect_case_documents_for_evaluation(case_id: str) -> list[dict[str, Any]]:
+    session = SessionLocal()
+    try:
+        rows = (
+            session.query(CaseDocument, DocumentArtifact)
+            .outerjoin(DocumentArtifact, DocumentArtifact.document_id == CaseDocument.id)
+            .filter(CaseDocument.case_id == case_id)
+            .order_by(CaseDocument.created_at.asc())
+            .all()
+        )
+        documents: list[dict[str, Any]] = []
+        for document, artifact in rows:
+            extracted = _json_loads(artifact.extracted_json) if artifact else None
+            documents.append({
+                "id": document.id,
+                "name": document.original_filename,
+                "mime_type": document.mime_type,
+                "document_type": document.document_type,
+                "upload_status": document.upload_status,
+                "parser_status": document.parser_status,
+                "extraction_status": document.extraction_status,
+                "raw_text": getattr(artifact, "raw_text", None) if artifact else None,
+                "normalized_text": getattr(artifact, "normalized_text", None) if artifact else None,
+                "content": getattr(artifact, "normalized_text", None) if artifact else None,
+                "extracted": extracted if isinstance(extracted, dict) else None,
+            })
+        return documents
+    finally:
+        session.close()
+
+
+def _load_case_for_evaluation(case_id: str) -> dict[str, Any] | None:
+    session = SessionLocal()
+    try:
+        case = session.get(ComplaintCase, case_id)
+        if case is None:
+            return None
+        classification = session.query(ClassificationRecord).filter(ClassificationRecord.case_id == case_id).first()
+        risk = session.query(RiskRecord).filter(RiskRecord.case_id == case_id).first()
+        resolution = session.query(ResolutionRecord).filter(ResolutionRecord.case_id == case_id).first()
+        return {
+            "id": case.id,
+            "public_case_id": case.public_case_id,
+            "consumer_narrative": case.consumer_narrative or "",
+            "review_notes": case.review_notes,
+            "routed_to": case.routed_to,
+            "document_gate_result": _json_loads(case.document_gate_result_json) or {},
+            "document_consistency": _json_loads(case.document_consistency_json) or {},
+            "root_cause_hypothesis": _json_loads(case.root_cause_hypothesis_json) or {},
+            "classification": {
+                "product_category": classification.product_category,
+                "issue_type": classification.issue_type,
+                "sub_issue": classification.sub_issue,
+                "confidence": classification.confidence,
+                "reasoning": classification.reasoning,
+                "review_recommended": bool(classification.review_recommended),
+                "reason_codes": _json_loads(classification.reason_codes_json) or [],
+                "keywords": _json_loads(classification.keywords_json) or [],
+            } if classification else {},
+            "risk_assessment": {
+                "risk_level": risk.risk_level,
+                "risk_score": risk.risk_score,
+                "regulatory_risk": risk.regulatory_risk,
+                "financial_impact_estimate": risk.financial_impact_estimate,
+                "escalation_required": risk.escalation_required,
+                "reasoning": risk.reasoning,
+            } if risk else {},
+            "resolution": {
+                "recommended_action": resolution.recommended_action,
+                "description": resolution.description,
+                "estimated_resolution_days": resolution.estimated_resolution_days,
+                "monetary_amount": resolution.monetary_amount,
+                "confidence": resolution.confidence,
+                "reasoning": resolution.reasoning,
+            } if resolution else {},
+            "documents": _collect_case_documents_for_evaluation(case_id),
+        }
+    finally:
+        session.close()
+
+
+def _build_production_system_assessment(
+    system_output: dict[str, Any],
+    *,
+    documents_present: bool,
+) -> dict[str, Any]:
+    classification = system_output.get("classification") or {}
+    risk = system_output.get("risk") or {}
+    root_cause = system_output.get("root_cause") or {}
+    resolution = system_output.get("resolution") or {}
+    document = system_output.get("document") or {}
+    metadata = system_output.get("metadata") or {}
+    review = metadata.get("review") or {}
+
+    checks = {
+        "classification_complete": bool(classification.get("product_category") and classification.get("issue_type")),
+        "risk_complete": bool(risk.get("risk_level") is not None and risk.get("risk_score") is not None),
+        "root_cause_complete": bool(root_cause.get("root_cause_category") and root_cause.get("reasoning")),
+        "resolution_complete": bool(resolution.get("recommended_action") and resolution.get("description")),
+        "document_considered": (not documents_present) or bool(document),
+        "review_signal_present": bool(classification.get("review_recommended")) or bool(risk.get("escalation_required")) or bool(review.get("decision")),
+    }
+    failed_dimensions = [key for key, passed in checks.items() if not passed]
+    overall = "pass" if not failed_dimensions else "needs_review"
+    if len(failed_dimensions) >= 3:
+        overall = "fail"
+
+    reasoning_parts: list[str] = []
+    if checks["classification_complete"]:
+        reasoning_parts.append("Classification output is present with product and issue labels.")
+    else:
+        reasoning_parts.append("Classification output is incomplete.")
+    if checks["risk_complete"]:
+        reasoning_parts.append("Risk assessment includes a level and score.")
+    else:
+        reasoning_parts.append("Risk assessment is missing key fields.")
+    if checks["root_cause_complete"]:
+        reasoning_parts.append("Root cause analysis includes a category and supporting reasoning.")
+    else:
+        reasoning_parts.append("Root cause analysis is incomplete or missing reasoning.")
+    if checks["resolution_complete"]:
+        reasoning_parts.append("Resolution output includes an action and business description.")
+    else:
+        reasoning_parts.append("Resolution output is incomplete.")
+    if documents_present:
+        if checks["document_considered"]:
+            reasoning_parts.append("Attached documents were incorporated into the evaluation context.")
+        else:
+            reasoning_parts.append("Documents were attached but the analysis does not show clear document grounding.")
+
+    return {
+        "overall_verdict": overall,
+        "checks": checks,
+        "failed_dimensions": failed_dimensions,
+        "reasoning": " ".join(reasoning_parts),
+    }
+
+
+def evaluate_production_case(case_id: str) -> dict[str, Any] | None:
+    """Create or refresh the production evaluation report for a real complaint case."""
+    payload = _load_case_for_evaluation(case_id)
+    if payload is None:
+        return None
+
+    raw_system_output = {
+        "classification": payload.get("classification") or {},
+        "risk_assessment": payload.get("risk_assessment") or {},
+        "resolution": payload.get("resolution") or {},
+        "root_cause_hypothesis": payload.get("root_cause_hypothesis") or {},
+        "review": {"decision": "review" if payload.get("classification", {}).get("review_recommended") else "approve"},
+        "routed_to": payload.get("routed_to"),
+        "document_gate_result": payload.get("document_gate_result") or {},
+        "document_consistency": payload.get("document_consistency") or {},
+    }
+    normalized_prediction = _build_normalized_prediction(raw_system_output)
+    judge_output = run_rubric_judge(
+        case_input={
+            "narrative": payload.get("consumer_narrative") or "",
+            "documents": payload.get("documents") or [],
+        },
+        system_output=normalized_prediction,
+    )
+    system_assessment = _build_production_system_assessment(
+        normalized_prediction,
+        documents_present=bool(payload.get("documents")),
+    )
+
+    judge_verdict = judge_output.get("overall_verdict") or "needs_review"
+    system_verdict = system_assessment.get("overall_verdict") or "needs_review"
+    overall_status = "pass" if judge_verdict == system_verdict == "pass" else "needs_review"
+    if judge_verdict == "fail" or system_verdict == "fail":
+        overall_status = "fail"
+
+    disagreement_types: list[str] = []
+    if judge_verdict != system_verdict:
+        disagreement_types.append("system_and_judge_verdict_mismatch")
+    if (judge_output.get("summary") or {}).get("failed_dimensions"):
+        disagreement_types.extend(f"judge_{item}" for item in judge_output["summary"]["failed_dimensions"])
+    if system_assessment.get("failed_dimensions"):
+        disagreement_types.extend(f"system_{item}" for item in system_assessment["failed_dimensions"])
+
+    session = SessionLocal()
+    try:
+        report = (
+            session.query(ComplaintEvaluationReport)
+            .filter(ComplaintEvaluationReport.case_id == case_id)
+            .first()
+        )
+        if report is None:
+            report = ComplaintEvaluationReport(id=uuid.uuid4().hex, case_id=case_id)
+            session.add(report)
+        report.run_status = "completed"
+        report.system_prediction_json = _json_dumps(normalized_prediction)
+        report.system_assessment_json = _json_dumps(system_assessment)
+        report.judge_output_json = _json_dumps(judge_output)
+        report.overall_status = overall_status
+        report.needs_human_review = overall_status != "pass"
+        report.disagreement_types_json = _json_dumps(sorted(set(disagreement_types)))
+        report.metrics_json = _json_dumps({
+            "judge_verdict": judge_verdict,
+            "system_verdict": system_verdict,
+            "documents_present": bool(payload.get("documents")),
+        })
+        report.judge_reasoning = judge_output.get("reasoning")
+        report.system_reasoning = system_assessment.get("reasoning")
+        report.evaluated_at = datetime.utcnow()
+        session.commit()
+        return {
+            "case_id": case_id,
+            "overall_status": overall_status,
+            "judge_verdict": judge_verdict,
+            "system_verdict": system_verdict,
+        }
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def _system_vs_gold(system_output: dict[str, Any], gold: EvaluationGoldLabel | None) -> tuple[dict[str, Any], list[str]]:
     if gold is None:
         return {"status": "unlabeled"}, []
@@ -1154,6 +1381,104 @@ def build_evaluation_case_detail(eval_case_id: str) -> dict[str, Any] | None:
                 for row in runs[:10]
             ],
             "terms": EVALUATION_TERM_DESCRIPTIONS,
+        }
+    finally:
+        session.close()
+
+
+def build_production_evaluation_dashboard_data() -> dict[str, Any]:
+    """Return admin-facing production evaluation summary for real complaint cases."""
+    session = SessionLocal()
+    try:
+        reports = (
+            session.query(ComplaintEvaluationReport)
+            .order_by(ComplaintEvaluationReport.evaluated_at.desc().nullslast(), ComplaintEvaluationReport.updated_at.desc())
+            .all()
+        )
+        recent_cases = (
+            session.query(ComplaintCase)
+            .order_by(ComplaintCase.created_at.desc())
+            .limit(20)
+            .all()
+        )
+
+        overall_counts = Counter(report.overall_status or "pending" for report in reports)
+        judge_counts = Counter(
+            ((_json_loads(report.metrics_json) or {}).get("judge_verdict") or "pending")
+            for report in reports
+        )
+        system_counts = Counter(
+            ((_json_loads(report.metrics_json) or {}).get("system_verdict") or "pending")
+            for report in reports
+        )
+
+        case_rows = []
+        for case in recent_cases:
+            report = case.evaluation_report
+            metrics = _json_loads(report.metrics_json) if report else {}
+            case_rows.append({
+                "id": case.id,
+                "public_case_id": case.public_case_id or case.id[:12].upper(),
+                "subject": (case.consumer_narrative or "")[:120],
+                "status": case.status,
+                "created_at": case.created_at,
+                "overall_status": report.overall_status if report else "pending",
+                "judge_verdict": (metrics or {}).get("judge_verdict", "pending") if report else "pending",
+                "system_verdict": (metrics or {}).get("system_verdict", "pending") if report else "pending",
+                "evaluated_at": report.evaluated_at if report else None,
+                "needs_human_review": bool(report.needs_human_review) if report else False,
+            })
+
+        return {
+            "summary": {
+                "evaluated_count": len(reports),
+                "pass_count": overall_counts.get("pass", 0),
+                "needs_review_count": overall_counts.get("needs_review", 0),
+                "fail_count": overall_counts.get("fail", 0),
+                "pending_count": max(0, session.query(ComplaintCase).count() - len(reports)),
+            },
+            "verdict_breakdown": {
+                "overall": dict(overall_counts),
+                "judge": dict(judge_counts),
+                "system": dict(system_counts),
+            },
+            "recent_case_reports": case_rows,
+        }
+    finally:
+        session.close()
+
+
+def build_production_evaluation_case_detail(case_id: str) -> dict[str, Any] | None:
+    """Return the stored production evaluation report for one complaint case."""
+    session = SessionLocal()
+    try:
+        case = session.get(ComplaintCase, case_id)
+        if case is None:
+            return None
+        report = case.evaluation_report
+        return {
+            "case": {
+                "id": case.id,
+                "public_case_id": case.public_case_id or case.id[:12].upper(),
+                "status": case.status,
+                "consumer_narrative": case.consumer_narrative or "",
+                "created_at": case.created_at,
+                "routed_to": case.routed_to,
+                "review_notes": case.review_notes,
+            },
+            "report": {
+                "overall_status": report.overall_status if report else "pending",
+                "system_prediction": _json_loads(report.system_prediction_json) if report else None,
+                "system_assessment": _json_loads(report.system_assessment_json) if report else None,
+                "judge_output": _json_loads(report.judge_output_json) if report else None,
+                "judge_reasoning": report.judge_reasoning if report else None,
+                "system_reasoning": report.system_reasoning if report else None,
+                "disagreement_types": _json_loads(report.disagreement_types_json) if report else [],
+                "metrics": _json_loads(report.metrics_json) if report else {},
+                "evaluated_at": report.evaluated_at if report else None,
+                "needs_human_review": bool(report.needs_human_review) if report else False,
+            },
+            "documents": _collect_case_documents_for_evaluation(case.id),
         }
     finally:
         session.close()
